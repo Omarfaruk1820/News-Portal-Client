@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+
 import Hero from "../Home/Hero";
 import api from "../services/api";
 
@@ -21,7 +22,7 @@ const Home = () => {
         onRetry={refetch}
       />
 
-      {/* LatestNews, CategoryNews, TrendingNews */}
+      {/* Add LatestNews, CategoryNews and other sections here. */}
     </main>
   );
 };

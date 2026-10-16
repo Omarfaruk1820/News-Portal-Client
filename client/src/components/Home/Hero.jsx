@@ -1,14 +1,8 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import {
-  ArrowRight,
-  ArrowUpRight,
-  Clock3,
-  Flame,
-  TrendingUp,
-} from "lucide-react";
+import { Link } from "react-router-dom";
+import { ArrowRight, Clock3, Flame, TrendingUp } from "lucide-react";
 
-import Button from "../common/Button";
+import FeaturedNews from "../news/FeaturedNews";
 import ErrorMessage from "../common/ErrorMessage";
 
 const MAX_SIDE_NEWS = 4;
@@ -43,26 +37,8 @@ const getArticlePath = (article) => {
   return null;
 };
 
-const getImageKey = (article, fallback = "article") =>
-  String(article?._id || article?.slug || fallback);
-
-const getAuthorInitial = (author) => {
-  if (typeof author !== "string" || !author.trim()) {
-    return "N";
-  }
-
-  return author.trim().charAt(0).toUpperCase();
-};
-
-const ImageFallback = ({ label = "Image unavailable" }) => (
-  <div
-    role="img"
-    aria-label={label}
-    className="flex h-full w-full items-center justify-center bg-slate-200 px-3 text-center text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-  >
-    {label}
-  </div>
-);
+const getImageKey = (article, index) =>
+  String(article?._id || article?.slug || `headline-${index}`);
 
 const HeroSkeleton = () => (
   <section
@@ -117,35 +93,7 @@ const Hero = ({
   onNewsClick,
   className = "",
 }) => {
-  const navigate = useNavigate();
   const [failedImages, setFailedImages] = useState({});
-
-  const markImageAsFailed = (imageKey) => {
-    setFailedImages((previous) => ({
-      ...previous,
-      [imageKey]: true,
-    }));
-  };
-
-  const openArticle = (article) => {
-    if (typeof onReadMore === "function") {
-      onReadMore(article);
-      return;
-    }
-
-    const destination = getArticlePath(article);
-
-    if (destination) {
-      navigate(destination);
-    }
-  };
-
-  const handleSideNewsClick = (event, article) => {
-    if (typeof onNewsClick === "function") {
-      event.preventDefault();
-      onNewsClick(article);
-    }
-  };
 
   if (loading) {
     return <HeroSkeleton />;
@@ -183,39 +131,6 @@ const Hero = ({
         .slice(0, MAX_SIDE_NEWS)
     : [];
 
-  // Do not show fake news when the database has no published articles.
-  if (!validFeaturedNews) {
-    return (
-      <section
-        aria-labelledby="hero-heading"
-        className={`bg-white py-8 text-slate-900 dark:bg-slate-950 dark:text-white sm:py-10 ${className}`}
-      >
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <h2
-            id="hero-heading"
-            className="text-2xl font-black tracking-tight sm:text-3xl"
-          >
-            Top Stories<span className="text-red-600">.</span>
-          </h2>
-
-          <p className="mt-3 rounded-xl border border-dashed border-slate-300 px-5 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-            No featured news is available right now. Please check back soon.
-          </p>
-        </div>
-      </section>
-    );
-  }
-
-  const featuredTitle =
-    typeof validFeaturedNews.title === "string" &&
-    validFeaturedNews.title.trim()
-      ? validFeaturedNews.title
-      : "Featured news story";
-
-  const featuredPath = getArticlePath(validFeaturedNews);
-  const featuredImageKey = getImageKey(validFeaturedNews, "featured");
-  const featuredImageFailed = Boolean(failedImages[featuredImageKey]);
-
   return (
     <section
       aria-labelledby="hero-heading"
@@ -235,12 +150,12 @@ const Hero = ({
               </span>
             </div>
 
-            <h2
+            <h1
               id="hero-heading"
               className="text-2xl font-black tracking-tight sm:text-3xl lg:text-4xl"
             >
               Top Stories<span className="text-red-600">.</span>
-            </h2>
+            </h1>
 
             <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600 dark:text-slate-400 sm:text-base">
               The latest headlines, important developments, and stories worth
@@ -254,152 +169,32 @@ const Hero = ({
           </div>
         </div>
 
-        {/* Featured news and secondary headlines */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-7">
-          {/* Featured article */}
-          <article className="group flex min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow duration-300 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900 lg:col-span-8">
-            <div className="relative">
-              <div className="relative aspect-[16/10] overflow-hidden bg-slate-100 dark:bg-slate-800 sm:aspect-[16/9]">
-                {validFeaturedNews.image && !featuredImageFailed ? (
-                  <img
-                    src={validFeaturedNews.image}
-                    alt={featuredTitle}
-                    onError={() => markImageAsFailed(featuredImageKey)}
-                    fetchPriority="high"
-                    decoding="async"
-                    className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
-                  />
-                ) : (
-                  <ImageFallback label="Featured image unavailable" />
-                )}
-
-                <div
+        {/* Main responsive layout */}
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12 lg:gap-7">
+          {/* Main featured article */}
+          <div className="min-w-0 lg:col-span-8">
+            {validFeaturedNews ? (
+              <FeaturedNews
+                article={validFeaturedNews}
+                onReadMore={onReadMore}
+              />
+            ) : (
+              <div className="flex min-h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 px-5 py-10 text-center dark:border-slate-700">
+                <Flame
+                  size={30}
+                  className="mb-3 text-slate-400"
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent"
                 />
-
-                <div className="absolute left-4 top-4 flex flex-wrap items-center gap-2 sm:left-6 sm:top-6">
-                  <span className="inline-flex items-center gap-2 rounded-md bg-red-600 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.15em] text-white shadow-lg sm:text-xs">
-                    <Flame size={14} />
-                    Featured Story
-                  </span>
-
-                  {validFeaturedNews.category && (
-                    <span className="rounded-md border border-white/30 bg-black/40 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white backdrop-blur-sm sm:text-xs">
-                      {validFeaturedNews.category}
-                    </span>
-                  )}
-                </div>
-
-                <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 lg:p-8">
-                  <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-medium text-white/85">
-                    {validFeaturedNews.author && (
-                      <span className="inline-flex items-center gap-1.5">
-                        <span
-                          aria-hidden="true"
-                          className="flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-[10px] font-bold text-white"
-                        >
-                          {getAuthorInitial(validFeaturedNews.author)}
-                        </span>
-                        {validFeaturedNews.author}
-                      </span>
-                    )}
-
-                    <span className="inline-flex items-center gap-1.5">
-                      <Clock3 size={14} />
-                      <time
-                        dateTime={validFeaturedNews.publishedAt || undefined}
-                      >
-                        {formatPublishedDate(validFeaturedNews.publishedAt)}
-                      </time>
-                    </span>
-                  </div>
-
-                  {featuredPath ? (
-                    <Link
-                      to={featuredPath}
-                      onClick={(event) => {
-                        if (typeof onReadMore === "function") {
-                          event.preventDefault();
-                          onReadMore(validFeaturedNews);
-                        }
-                      }}
-                      className="block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                    >
-                      <h3 className="max-w-3xl text-2xl font-black leading-tight tracking-tight text-white transition-colors group-hover:text-red-100 sm:text-3xl lg:text-4xl xl:text-[2.7rem]">
-                        {featuredTitle}
-                      </h3>
-                    </Link>
-                  ) : (
-                    <h3 className="max-w-3xl text-2xl font-black leading-tight tracking-tight text-white sm:text-3xl lg:text-4xl">
-                      {featuredTitle}
-                    </h3>
-                  )}
-
-                  {validFeaturedNews.summary && (
-                    <p className="mt-3 hidden max-w-2xl text-sm leading-6 text-white/85 sm:line-clamp-2 md:block lg:text-base">
-                      {validFeaturedNews.summary}
-                    </p>
-                  )}
-
-                  <div className="mt-5 flex flex-wrap items-center gap-3">
-                    {featuredPath ? (
-                      <Link
-                        to={featuredPath}
-                        onClick={(event) => {
-                          if (typeof onReadMore === "function") {
-                            event.preventDefault();
-                            onReadMore(validFeaturedNews);
-                          }
-                        }}
-                        className="inline-flex min-h-11 items-center gap-2 rounded-lg text-sm font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                      >
-                        Read the full story
-                        <ArrowUpRight
-                          size={17}
-                          className="transition-transform group-hover:translate-x-1 group-hover:-translate-y-1"
-                        />
-                      </Link>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => openArticle(validFeaturedNews)}
-                        className="inline-flex min-h-11 items-center gap-2 rounded-lg text-sm font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                      >
-                        Read the full story
-                        <ArrowUpRight size={17} />
-                      </button>
-                    )}
-
-                    {validFeaturedNews.readTime && (
-                      <span className="rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs text-white/90 backdrop-blur-sm">
-                        {validFeaturedNews.readTime}
-                      </span>
-                    )}
-                  </div>
-                </div>
+                <h2 className="text-lg font-bold">
+                  No featured story available
+                </h2>
+                <p className="mt-2 max-w-md text-sm leading-6 text-slate-500 dark:text-slate-400">
+                  Our top story will appear here when a published article is
+                  available.
+                </p>
               </div>
-            </div>
-
-            {/* Featured article footer */}
-            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
-              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                In-depth coverage from our newsroom
-              </span>
-
-              {featuredPath && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  rightIcon={<ArrowRight size={16} />}
-                  onClick={() => openArticle(validFeaturedNews)}
-                >
-                  Read Full Story
-                </Button>
-              )}
-            </div>
-          </article>
+            )}
+          </div>
 
           {/* Secondary headlines */}
           <aside
@@ -407,13 +202,13 @@ const Hero = ({
             className="flex min-w-0 flex-col lg:col-span-4"
           >
             <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-3 dark:border-slate-800">
-              <h3
+              <h2
                 id="more-stories-heading"
                 className="flex items-center gap-2 text-lg font-extrabold tracking-tight sm:text-xl"
               >
                 <TrendingUp size={20} className="text-red-600" />
                 More Headlines
-              </h3>
+              </h2>
 
               <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
                 Top picks
@@ -423,7 +218,7 @@ const Hero = ({
             {headlines.length > 0 ? (
               <div className="flex flex-col divide-y divide-slate-200 dark:divide-slate-800">
                 {headlines.map((article, index) => {
-                  const imageKey = getImageKey(article, `side-${index}`);
+                  const imageKey = getImageKey(article, index);
                   const imageFailed = Boolean(failedImages[imageKey]);
                   const articlePath = getArticlePath(article);
 
@@ -434,21 +229,37 @@ const Hero = ({
                     >
                       <Link
                         to={articlePath}
-                        onClick={(event) => handleSideNewsClick(event, article)}
+                        onClick={(event) => {
+                          if (typeof onNewsClick === "function") {
+                            event.preventDefault();
+                            onNewsClick(article);
+                          }
+                        }}
                         className="flex items-start gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 sm:gap-4"
                       >
-                        <div className="relative h-24 w-28 shrink-0 overflow-hidden rounded-xl bg-slate-100 sm:h-28 sm:w-32 dark:bg-slate-800">
+                        <div className="relative h-24 w-28 shrink-0 overflow-hidden rounded-xl bg-slate-100 sm:h-28 sm:w-32">
                           {article.image && !imageFailed ? (
                             <img
                               src={article.image}
                               alt={article.title || "News thumbnail"}
                               loading="lazy"
                               decoding="async"
-                              onError={() => markImageAsFailed(imageKey)}
+                              onError={() =>
+                                setFailedImages((previous) => ({
+                                  ...previous,
+                                  [imageKey]: true,
+                                }))
+                              }
                               className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                             />
                           ) : (
-                            <ImageFallback label="Image unavailable" />
+                            <div
+                              role="img"
+                              aria-label="News image unavailable"
+                              className="flex h-full items-center justify-center px-2 text-center text-xs text-slate-500 dark:text-slate-400"
+                            >
+                              Image unavailable
+                            </div>
                           )}
 
                           <span className="absolute left-2 top-2 flex h-6 w-6 items-center justify-center rounded-md bg-black/70 text-xs font-extrabold text-white backdrop-blur-sm">
@@ -463,11 +274,12 @@ const Hero = ({
                             </span>
                           )}
 
-                          <h4 className="line-clamp-3 text-sm font-bold leading-5 text-slate-900 transition-colors group-hover:text-red-600 sm:text-base sm:leading-6 dark:text-slate-100 dark:group-hover:text-red-400">
+                          <h3 className="line-clamp-3 text-sm font-bold leading-5 text-slate-900 transition-colors group-hover:text-red-600 sm:text-base sm:leading-6 dark:text-slate-100 dark:group-hover:text-red-400">
                             {article.title || "Untitled news story"}
-                          </h4>
+                          </h3>
 
                           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
+                            <Clock3 size={12} aria-hidden="true" />
                             <time dateTime={article.publishedAt || undefined}>
                               {formatPublishedDate(article.publishedAt)}
                             </time>
@@ -487,7 +299,8 @@ const Hero = ({
               </div>
             ) : (
               <p className="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                More headlines will appear here soon.
+                More headlines will appear here when published news is
+                available.
               </p>
             )}
 
