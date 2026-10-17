@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import {
   Menu,
   X,
@@ -11,7 +11,12 @@ import {
   TrendingUp,
   Globe2,
   ChevronRight,
+  LogIn,
+  UserPlus,
+  LogOut,
+  UserRound,
 } from "lucide-react";
+import { useAuth } from "../hooks/useAuth";
 
 const CATEGORIES = [
   { name: "জাতীয়", path: "/category/national" },
@@ -30,27 +35,36 @@ const BREAKING_NEWS = [
   "রাজনীতি, অর্থনীতি, খেলাধুলা ও প্রযুক্তির আপডেট",
 ];
 
+const THEME_KEY = "news-portal-theme";
+
 const getSavedTheme = () => {
   try {
-    const savedTheme = localStorage.getItem("news-portal-theme");
+    const savedTheme = localStorage.getItem(THEME_KEY);
 
     if (savedTheme === "dark" || savedTheme === "light") {
       return savedTheme;
     }
   } catch {
-    // Continue with the default theme if storage is unavailable.
+    // Use light mode if localStorage is unavailable.
   }
 
   return "light";
 };
 
 const Navbar = () => {
+  const navigate = useNavigate();
+
+  // Assumes useAuth provides user, loading, and logout.
+  const { user, loading: authLoading, logout } = useAuth();
+
   const [theme, setTheme] = useState(getSavedTheme);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const isDark = theme === "dark";
+  const isLoggedIn = Boolean(user);
 
   const today = new Intl.DateTimeFormat("bn-BD", {
     weekday: "long",
@@ -59,6 +73,7 @@ const Navbar = () => {
     year: "numeric",
   }).format(new Date());
 
+  // Apply the theme globally and persist the preference.
   useEffect(() => {
     const root = document.documentElement;
 
@@ -66,24 +81,25 @@ const Navbar = () => {
     root.style.colorScheme = isDark ? "dark" : "light";
 
     try {
-      localStorage.setItem("news-portal-theme", theme);
+      localStorage.setItem(THEME_KEY, theme);
     } catch {
-      // Theme still works for the current session.
+      // The current session theme still works.
     }
   }, [theme, isDark]);
 
+  // Close mobile menu and search with Escape.
   useEffect(() => {
-    const closeOnEscape = (event) => {
+    const handleEscape = (event) => {
       if (event.key === "Escape") {
         setMobileMenuOpen(false);
         setSearchOpen(false);
       }
     };
 
-    document.addEventListener("keydown", closeOnEscape);
+    document.addEventListener("keydown", handleEscape);
 
     return () => {
-      document.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("keydown", handleEscape);
     };
   }, []);
 
@@ -91,7 +107,9 @@ const Navbar = () => {
     setTheme((current) => (current === "dark" ? "light" : "dark"));
   };
 
-  const closeMobileMenu = () => setMobileMenuOpen(false);
+  const closeMobileMenu = () => {
+    setMobileMenuOpen(false);
+  };
 
   const handleSearch = (event) => {
     event.preventDefault();
@@ -100,26 +118,122 @@ const Navbar = () => {
 
     if (!query) return;
 
-    window.location.href = `/search?q=${encodeURIComponent(query)}`;
     setSearchOpen(false);
     setSearchQuery("");
+    closeMobileMenu();
+
+    navigate(`/search?q=${encodeURIComponent(query)}`);
+  };
+
+  const handleLogout = async () => {
+    if (typeof logout !== "function" || loggingOut) return;
+
+    setLoggingOut(true);
+
+    try {
+      await logout();
+
+      closeMobileMenu();
+      setSearchOpen(false);
+      navigate("/", { replace: true });
+    } catch (error) {
+      console.error("Logout failed:", error);
+    } finally {
+      setLoggingOut(false);
+    }
   };
 
   const navLinkClass = ({ isActive }) =>
     [
-      "whitespace-nowrap border-b-2 px-3 py-4 text-sm font-semibold transition-colors",
+      "whitespace-nowrap border-b-2 px-3 py-4 text-sm font-semibold",
+      "transition-colors duration-200",
       isActive
         ? "border-red-600 text-red-600"
-        : "border-transparent text-slate-700 hover:border-red-500 hover:text-red-600 dark:text-slate-200",
+        : [
+            "border-transparent text-slate-700",
+            "hover:border-red-500 hover:text-red-600",
+            "dark:text-slate-200 dark:hover:text-red-400",
+          ].join(" "),
     ].join(" ");
 
   const mobileLinkClass = ({ isActive }) =>
     [
-      "flex items-center justify-between rounded-lg px-4 py-3 text-sm font-semibold transition-colors",
+      "flex items-center justify-between gap-3 rounded-lg px-4 py-3",
+      "text-sm font-semibold transition-colors",
       isActive
         ? "bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-300"
-        : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800",
+        : [
+            "text-slate-700 hover:bg-slate-100",
+            "dark:text-slate-200 dark:hover:bg-slate-800",
+          ].join(" "),
     ].join(" ");
+
+  const authButtonClass =
+    "inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-bold transition-colors sm:px-4";
+
+  const renderAuthActions = (mobile = false) => {
+    if (authLoading) {
+      return (
+        <div
+          className="h-9 w-24 animate-pulse rounded-lg bg-slate-200 dark:bg-slate-800"
+          aria-label="Authentication loading"
+        />
+      );
+    }
+
+    if (!isLoggedIn) {
+      return (
+        <div
+          className={
+            mobile ? "grid grid-cols-2 gap-2" : "flex items-center gap-2"
+          }
+        >
+          <Link
+            to="/login"
+            onClick={closeMobileMenu}
+            className={`${authButtonClass} border border-slate-200 text-slate-700 hover:border-red-300 hover:text-red-600 dark:border-slate-700 dark:text-slate-200 dark:hover:border-red-700`}
+          >
+            <LogIn size={16} />
+            লগইন
+          </Link>
+
+          <Link
+            to="/register"
+            onClick={closeMobileMenu}
+            className={`${authButtonClass} bg-red-600 text-white hover:bg-red-700`}
+          >
+            <UserPlus size={16} />
+            রেজিস্টার
+          </Link>
+        </div>
+      );
+    }
+
+    return (
+      <div
+        className={
+          mobile ? "grid grid-cols-2 gap-2" : "flex items-center gap-2"
+        }
+      >
+        <div className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-sm text-slate-700 dark:text-slate-200">
+          <UserRound size={17} className="shrink-0" />
+          <span className="max-w-28 truncate font-semibold">
+            {user.displayName || user.name || user.email || "ব্যবহারকারী"}
+          </span>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleLogout}
+          disabled={loggingOut}
+          className={`${authButtonClass} border border-red-200 text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-900 dark:hover:bg-red-950`}
+        >
+          <LogOut size={16} />
+          {loggingOut ? "অপেক্ষা করুন..." : "লগআউট"}
+        </button>
+      </div>
+    );
+  };
 
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200 bg-white text-slate-900 shadow-sm transition-colors duration-200 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100">
@@ -134,7 +248,7 @@ const Navbar = () => {
             <span>বাংলাদেশ</span>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <Link
               to="/latest"
               className="text-xs font-semibold text-slate-600 hover:text-red-600 dark:text-slate-300"
@@ -163,16 +277,16 @@ const Navbar = () => {
       </div>
 
       {/* Main brand header */}
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 lg:px-8">
-        <div className="flex min-w-0 items-center gap-2">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-3 sm:gap-3 sm:px-4 sm:py-4 lg:px-8">
+        <div className="flex min-w-0 items-center gap-1 sm:gap-2">
           <button
             type="button"
             onClick={() => setMobileMenuOpen((open) => !open)}
             aria-label={mobileMenuOpen ? "মেনু বন্ধ করুন" : "মেনু খুলুন"}
             aria-expanded={mobileMenuOpen}
-            className="rounded-lg p-2 text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800 lg:hidden"
+            className="shrink-0 rounded-lg p-2 text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800 lg:hidden"
           >
-            {mobileMenuOpen ? <X size={23} /> : <Menu size={23} />}
+            {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
 
           <Link
@@ -181,12 +295,12 @@ const Navbar = () => {
             className="flex min-w-0 items-center gap-2"
             aria-label="সংবাদ২৪ হোম"
           >
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-600 text-2xl font-black text-white shadow-md shadow-red-600/20">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-600 text-xl font-black text-white shadow-md shadow-red-600/20 sm:h-11 sm:w-11 sm:text-2xl">
               ন
             </span>
 
             <span className="min-w-0">
-              <span className="block whitespace-nowrap text-2xl font-black leading-tight tracking-tight text-slate-900 dark:text-white sm:text-3xl">
+              <span className="block whitespace-nowrap text-xl font-black leading-tight tracking-tight text-slate-900 dark:text-white sm:text-3xl">
                 সংবাদ<span className="text-red-600">২৪</span>
               </span>
               <span className="hidden text-[11px] text-slate-500 dark:text-slate-400 sm:block">
@@ -206,15 +320,15 @@ const Navbar = () => {
           </Link>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <button
             type="button"
             onClick={() => setSearchOpen((open) => !open)}
             aria-label={searchOpen ? "সার্চ বন্ধ করুন" : "সার্চ খুলুন"}
             aria-expanded={searchOpen}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-700 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-700 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 sm:h-10 sm:w-10"
           >
-            {searchOpen ? <X size={19} /> : <Search size={19} />}
+            {searchOpen ? <X size={18} /> : <Search size={18} />}
           </button>
 
           <button
@@ -222,24 +336,27 @@ const Navbar = () => {
             onClick={toggleTheme}
             aria-label={isDark ? "লাইট মোড চালু করুন" : "ডার্ক মোড চালু করুন"}
             title={isDark ? "লাইট মোড" : "ডার্ক মোড"}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 text-slate-700 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-700 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 sm:h-10 sm:w-10"
           >
-            {isDark ? <Sun size={19} /> : <Moon size={19} />}
+            {isDark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
 
           <Link
             to="/latest"
-            className="hidden items-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-700 sm:flex"
+            className="hidden items-center gap-2 rounded-lg bg-red-600 px-3 py-2.5 text-sm font-bold text-white transition hover:bg-red-700 xl:flex"
           >
             <TrendingUp size={17} />
             সর্বশেষ খবর
           </Link>
+
+          {/* Always-visible desktop authentication actions */}
+          <div className="hidden lg:block">{renderAuthActions()}</div>
         </div>
       </div>
 
       {/* Search panel */}
       {searchOpen && (
-        <div className="border-t border-slate-200 bg-white px-4 py-4 dark:border-slate-800 dark:bg-slate-950">
+        <div className="border-t border-slate-200 bg-white px-3 py-4 dark:border-slate-800 dark:bg-slate-950 sm:px-4">
           <form
             onSubmit={handleSearch}
             role="search"
@@ -253,14 +370,14 @@ const Navbar = () => {
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="আপনি কী খুঁজছেন?"
                 aria-label="সংবাদ খুঁজুন"
-                className="w-full bg-transparent py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white"
+                className="w-full min-w-0 bg-transparent py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 dark:text-white"
                 autoFocus
               />
             </div>
 
             <button
               type="submit"
-              className="rounded-xl bg-red-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-red-700"
+              className="shrink-0 rounded-xl bg-red-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-700 sm:px-5"
             >
               খুঁজুন
             </button>
@@ -268,35 +385,55 @@ const Navbar = () => {
         </div>
       )}
 
-      {/* Desktop category navigation */}
+      {/* Desktop navigation: categories only for logged-in users */}
       <nav
         aria-label="প্রধান নেভিগেশন"
         className="hidden border-y border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950 lg:block"
       >
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 lg:px-8">
-          <div className="flex min-w-0 items-center overflow-x-auto">
-            <NavLink to="/" end className={navLinkClass}>
-              প্রচ্ছদ
-            </NavLink>
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 lg:px-8">
+          {authLoading ? (
+            <div className="h-12 flex-1 animate-pulse rounded bg-slate-100 dark:bg-slate-900" />
+          ) : isLoggedIn ? (
+            <>
+              <div className="flex min-w-0 flex-1 items-center overflow-x-auto">
+                <NavLink to="/" end className={navLinkClass}>
+                  প্রচ্ছদ
+                </NavLink>
 
-            {CATEGORIES.map((category) => (
-              <NavLink
-                key={category.path}
-                to={category.path}
-                className={navLinkClass}
+                {CATEGORIES.map((category) => (
+                  <NavLink
+                    key={category.path}
+                    to={category.path}
+                    className={navLinkClass}
+                  >
+                    {category.name}
+                  </NavLink>
+                ))}
+              </div>
+
+              <Link
+                to="/live"
+                className="ml-2 flex shrink-0 items-center gap-2 py-4 text-sm font-bold text-red-600 hover:text-red-700"
               >
-                {category.name}
-              </NavLink>
-            ))}
-          </div>
+                <span className="h-2 w-2 animate-pulse rounded-full bg-red-600" />
+                লাইভ
+              </Link>
+            </>
+          ) : (
+            <div className="flex min-h-12 w-full items-center justify-between gap-3">
+              <Link
+                to="/"
+                end="true"
+                className="text-sm font-semibold text-slate-700 hover:text-red-600 dark:text-slate-200"
+              >
+                প্রচ্ছদ
+              </Link>
 
-          <Link
-            to="/live"
-            className="ml-3 flex shrink-0 items-center gap-2 py-4 text-sm font-bold text-red-600 hover:text-red-700"
-          >
-            <span className="h-2 w-2 animate-pulse rounded-full bg-red-600" />
-            লাইভ
-          </Link>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                সংবাদ বিভাগ দেখতে লগইন করুন
+              </p>
+            </div>
+          )}
         </div>
       </nav>
 
@@ -323,7 +460,7 @@ const Navbar = () => {
                     key={`${copy}-${index}`}
                     to="/latest"
                     tabIndex={copy === 1 ? -1 : undefined}
-                    className="inline-flex items-center gap-3 whitespace-nowrap px-5 py-3 text-xs font-medium text-slate-700 transition hover:text-red-600 dark:text-slate-200 sm:text-sm"
+                    className="inline-flex items-center gap-3 whitespace-nowrap px-4 py-3 text-xs font-medium text-slate-700 transition hover:text-red-600 dark:text-slate-200 sm:px-5 sm:text-sm"
                   >
                     <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-600" />
                     {news}
@@ -338,10 +475,13 @@ const Navbar = () => {
         </div>
       </div>
 
-      {/* Mobile navigation */}
+      {/* Mobile menu */}
       {mobileMenuOpen && (
         <div className="border-b border-slate-200 bg-white shadow-lg dark:border-slate-800 dark:bg-slate-950 lg:hidden">
-          <nav aria-label="মোবাইল নেভিগেশন" className="space-y-1 px-4 py-3">
+          <nav
+            aria-label="মোবাইল নেভিগেশন"
+            className="space-y-1 px-3 py-3 sm:px-4"
+          >
             <NavLink
               to="/"
               end
@@ -352,17 +492,42 @@ const Navbar = () => {
               <ChevronRight size={16} />
             </NavLink>
 
-            {CATEGORIES.map((category) => (
-              <NavLink
-                key={category.path}
-                to={category.path}
-                onClick={closeMobileMenu}
-                className={mobileLinkClass}
-              >
-                {category.name}
-                <ChevronRight size={16} />
-              </NavLink>
-            ))}
+            {authLoading ? (
+              <div className="space-y-2 p-3">
+                <div className="h-8 animate-pulse rounded bg-slate-100 dark:bg-slate-900" />
+                <div className="h-8 animate-pulse rounded bg-slate-100 dark:bg-slate-900" />
+              </div>
+            ) : isLoggedIn ? (
+              <>
+                {CATEGORIES.map((category) => (
+                  <NavLink
+                    key={category.path}
+                    to={category.path}
+                    onClick={closeMobileMenu}
+                    className={mobileLinkClass}
+                  >
+                    {category.name}
+                    <ChevronRight size={16} />
+                  </NavLink>
+                ))}
+
+                <NavLink
+                  to="/live"
+                  onClick={closeMobileMenu}
+                  className={mobileLinkClass}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-red-600" />
+                    লাইভ
+                  </span>
+                  <ChevronRight size={16} />
+                </NavLink>
+              </>
+            ) : (
+              <div className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+                সংবাদ বিভাগ দেখতে লগইন অথবা রেজিস্টার করুন।
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-2 border-t border-slate-200 pt-3 dark:border-slate-800">
               <Link
@@ -382,7 +547,12 @@ const Navbar = () => {
               </Link>
             </div>
 
-            <div className="flex items-center justify-between gap-3 pt-3">
+            {/* Authentication buttons on mobile */}
+            <div className="border-t border-slate-200 pt-3 dark:border-slate-800">
+              {renderAuthActions(true)}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 pt-2">
               <span className="text-xs text-slate-500 dark:text-slate-400">
                 {today}
               </span>
@@ -411,6 +581,7 @@ const Navbar = () => {
           from {
             transform: translateX(0);
           }
+
           to {
             transform: translateX(-50%);
           }
